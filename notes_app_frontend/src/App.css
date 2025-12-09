@@ -524,6 +524,41 @@ button.filter-chip:hover {
   }
 }
 
+/* Export/Import Controls */
+.export-import-controls {
+  padding: 4px;
+  border-radius: 8px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+}
+
+.import-status {
+  animation: slideIn 0.3s ease-out;
+}
+
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Button states for export/import */
+.btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  filter: grayscale(1);
+}
+
+.btn:disabled:hover {
+  background: var(--bg);
+  transform: none;
+}
+
 /* Extended Markdown Styles */
 .markdown-preview .table-container {
   overflow-x: auto;

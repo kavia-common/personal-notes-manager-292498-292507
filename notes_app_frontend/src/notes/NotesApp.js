@@ -288,6 +288,9 @@ export function NotesApp() {
         setSearch={setSearch}
         sortBy={sortBy}
         setSortBy={setSortBy}
+        allNotes={notes} // Pass all notes for JSON export (ignores filters)
+        currentNote={null} // No current note in list view
+        onRefresh={refresh} // Pass refresh function for after import
       />
     </Layout>
   );

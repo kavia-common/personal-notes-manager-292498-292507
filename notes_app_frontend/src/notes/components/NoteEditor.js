@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { ExportImportUtils } from '../utils/exportImport';
 
 /**
  * Editor form for creating or editing a note with Markdown support.
@@ -16,6 +17,7 @@ export function NoteEditor({ initial, onSave, onCancel }) {
   );
   const [error, setError] = useState('');
   const [isPreview, setIsPreview] = useState(false);
+  const [exportStatus, setExportStatus] = useState(null);
   const titleRef = useRef(null);
   const textareaRef = useRef(null);
   const fileInputRef = useRef(null);
@@ -141,6 +143,51 @@ export function NoteEditor({ initial, onSave, onCancel }) {
       pinned,
       favorite,
     });
+  }
+
+  // Export handlers for current note
+  function handleExportCurrentAsJSON() {
+    const currentNote = {
+      id: initial?.id || 'temp',
+      title: title.trim() || 'Untitled',
+      content,
+      tags: toTags(tags),
+      pinned,
+      favorite,
+      createdAt: initial?.createdAt || new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+
+    const result = ExportImportUtils.exportNotesAsJSON([currentNote]);
+    if (!result.success) {
+      setExportStatus({ type: 'error', message: `Export failed: ${result.error}` });
+    } else {
+      setExportStatus({ type: 'success', message: `Note exported as ${result.filename}` });
+    }
+    // Clear status after 5 seconds
+    setTimeout(() => setExportStatus(null), 5000);
+  }
+
+  function handleExportCurrentAsMarkdown() {
+    const currentNote = {
+      id: initial?.id || 'temp',
+      title: title.trim() || 'Untitled',
+      content,
+      tags: toTags(tags),
+      pinned,
+      favorite,
+      createdAt: initial?.createdAt || new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+
+    const result = ExportImportUtils.exportNotesAsMarkdown([currentNote]);
+    if (!result.success) {
+      setExportStatus({ type: 'error', message: `Export failed: ${result.error}` });
+    } else {
+      setExportStatus({ type: 'success', message: `Note exported as ${result.filename}` });
+    }
+    // Clear status after 5 seconds
+    setTimeout(() => setExportStatus(null), 5000);
   }
 
   // Lightweight Markdown Parser
@@ -405,6 +452,26 @@ export function NoteEditor({ initial, onSave, onCancel }) {
 
   return (
     <section className="card" aria-label="Note editor">
+      {/* Export Status Messages */}
+      {exportStatus && (
+        <div
+          className={`import-status ${exportStatus.type}`}
+          style={{
+            padding: '12px 16px',
+            borderRadius: '8px',
+            margin: '16px 16px 0 16px',
+            fontSize: '14px',
+            backgroundColor: exportStatus.type === 'success' ? 'var(--surface)' : '#fee',
+            color: exportStatus.type === 'success' ? 'var(--text)' : '#c53030',
+            border: `1px solid ${exportStatus.type === 'success' ? 'var(--border)' : '#f87171'}`,
+          }}
+          role={exportStatus.type === 'error' ? 'alert' : 'status'}
+          aria-live="polite"
+        >
+          {exportStatus.message}
+        </div>
+      )}
+
       <form className="editor" onSubmit={handleSubmit}>
         <label>
           Title
@@ -474,13 +541,47 @@ export function NoteEditor({ initial, onSave, onCancel }) {
 
         <div role="group" aria-label="Editor mode" className="editor-group">
           <div className="editor-header">
-            <label
-              className="input-label"
-              style={{ marginBottom: 4 }}
-            >
-              Content
-            </label>
-            <div className="tab-group">
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap', justifyContent: 'space-between' }}>
+              <label
+                className="input-label"
+                style={{ marginBottom: 0 }}
+              >
+                Content
+              </label>
+              
+              {/* Export Controls */}
+              <div
+                className="export-controls"
+                style={{
+                  display: 'flex',
+                  gap: '6px',
+                }}
+                aria-label="Export current note"
+              >
+                <button
+                  type="button"
+                  className="btn"
+                  onClick={handleExportCurrentAsJSON}
+                  style={{ fontSize: '12px', padding: '4px 8px' }}
+                  aria-label="Export current note as JSON"
+                  title="Export this note as JSON"
+                >
+                  📄 JSON
+                </button>
+                <button
+                  type="button"
+                  className="btn"
+                  onClick={handleExportCurrentAsMarkdown}
+                  style={{ fontSize: '12px', padding: '4px 8px' }}
+                  aria-label="Export current note as Markdown"
+                  title="Export this note as Markdown"
+                >
+                  📝 MD
+                </button>
+              </div>
+            </div>
+            
+            <div className="tab-group" style={{ marginTop: '8px' }}>
               <button
                 type="button"
                 className={`tab-btn ${!isPreview ? 'active' : ''}`}
