@@ -8,12 +8,28 @@ function uid() {
 }
 
 /**
- * Read notes array from localStorage.
+ * Ensure a loaded note object has all required fields including
+ * newly added flags for pinned and favorite.
+ */
+function ensureFlags(note) {
+  return {
+    ...note,
+    // default to false if missing to preserve backward compatibility
+    pinned: typeof note.pinned === 'boolean' ? note.pinned : false,
+    favorite: typeof note.favorite === 'boolean' ? note.favorite : false,
+  };
+}
+
+/**
+ * Read notes array from localStorage and normalize legacy items
+ * that may not have pinned/favorite flags.
  */
 function read() {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    return raw ? JSON.parse(raw) : [];
+    const parsed = raw ? JSON.parse(raw) : [];
+    if (!Array.isArray(parsed)) return [];
+    return parsed.map(ensureFlags);
   } catch {
     return [];
   }
@@ -23,15 +39,19 @@ function read() {
  * Persist notes array to localStorage.
  */
 function write(notes) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(notes));
+  // Always store normalized notes so all items include pinned/favorite
+  const normalized = Array.isArray(notes) ? notes.map(ensureFlags) : [];
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(normalized));
 }
 
 /**
- * Normalize a note object.
+ * Normalize a note object for creation.
+ * For create() we treat missing pinned/favorite as false. If a caller
+ * explicitly provides these properties, they are respected.
  */
 function normalize(note) {
   const now = new Date().toISOString();
-  return {
+  const base = {
     id: note.id || uid(),
     title: note.title?.trim() || 'Untitled',
     content: note.content || '',
@@ -39,6 +59,45 @@ function normalize(note) {
     createdAt: note.createdAt || now,
     updatedAt: now,
   };
+
+  const pinned =
+    typeof note.pinned === 'boolean'
+      ? note.pinned
+      : typeof base.pinned === 'boolean'
+      ? base.pinned
+      : false;
+
+  const favorite =
+    typeof note.favorite === 'boolean'
+      ? note.favorite
+      : typeof base.favorite === 'boolean'
+      ? base.favorite
+      : false;
+
+  return {
+    ...base,
+    pinned,
+    favorite,
+  };
+}
+
+/**
+ * Sort helper that always surfaces pinned notes first, then applies
+ * secondary sort rules. Secondary sort:
+ *  - Within pinned group: updatedAt desc
+ *  - Within unpinned group: updatedAt desc
+ */
+function sortPinnedFirst(notes) {
+  const copy = [...notes];
+  copy.sort((a, b) => {
+    const aPinned = a.pinned ? 1 : 0;
+    const bPinned = b.pinned ? 1 : 0;
+    if (aPinned !== bPinned) {
+      return bPinned - aPinned; // pinned (1) before unpinned (0)
+    }
+    return new Date(b.updatedAt) - new Date(a.updatedAt);
+  });
+  return copy;
 }
 
 // PUBLIC_INTERFACE
@@ -47,14 +106,16 @@ export const NotesService = {
    * Get all notes.
    */
   async list() {
-    return read().sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
+    const notes = read();
+    return sortPinnedFirst(notes);
   },
 
   /**
    * Get single note by id.
    */
   async get(id) {
-    return read().find(n => n.id === id) || null;
+    const note = read().find((n) => n.id === id) || null;
+    return note ? ensureFlags(note) : null;
   },
 
   /**
@@ -70,12 +131,22 @@ export const NotesService = {
 
   /**
    * Update an existing note by id.
+   * This preserves existing pinned/favorite flags unless explicitly
+   * overridden in the patch, ensuring partial updates work correctly.
    */
   async update(id, patch) {
     const notes = read();
-    const idx = notes.findIndex(n => n.id === id);
+    const idx = notes.findIndex((n) => n.id === id);
     if (idx === -1) return null;
-    const updated = { ...notes[idx], ...patch, updatedAt: new Date().toISOString() };
+
+    const current = ensureFlags(notes[idx]);
+
+    const updated = ensureFlags({
+      ...current,
+      ...patch,
+      updatedAt: new Date().toISOString(),
+    });
+
     notes[idx] = updated;
     write(notes);
     return updated;
@@ -85,7 +156,7 @@ export const NotesService = {
    * Delete a note by id.
    */
   async remove(id) {
-    const notes = read().filter(n => n.id !== id);
+    const notes = read().filter((n) => n.id !== id);
     write(notes);
     return true;
   },
@@ -95,7 +166,7 @@ export const NotesService = {
    */
   async tags() {
     const set = new Set();
-    read().forEach(n => (n.tags || []).forEach(t => set.add(t)));
+    read().forEach((n) => (n.tags || []).forEach((t) => set.add(t)));
     return Array.from(set).sort((a, b) => a.localeCompare(b));
   },
 };

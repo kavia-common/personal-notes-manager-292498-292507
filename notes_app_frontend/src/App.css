@@ -250,6 +250,17 @@ a { color: inherit; }
   gap: 8px;
 }
 
+/* Small flag icons next to titles */
+.note-flag {
+  font-size: 0.9em;
+}
+
+/* Compact icon-style buttons for pin/favorite */
+.btn-icon {
+  padding-inline: 8px;
+  min-width: 0;
+}
+
 /* Editor */
 .editor {
   display: grid;

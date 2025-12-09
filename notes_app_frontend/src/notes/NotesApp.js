@@ -17,16 +17,19 @@ export function NotesApp() {
   const [tags, setTags] = useState([]);
   const [activeTag, setActiveTag] = useState(null);
   const [search, setSearch] = useState('');
+  const [sortBy, setSortBy] = useState('pinned'); // 'pinned' | 'updated' | 'title'
 
   // Theme state
-  const [theme, setTheme] = useState(() => localStorage.getItem('notes_theme') || 'light');
+  const [theme, setTheme] = useState(
+    () => localStorage.getItem('notes_theme') || 'light'
+  );
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
     localStorage.setItem('notes_theme', theme);
   }, [theme]);
 
-  const toggleTheme = () => setTheme(t => t === 'light' ? 'dark' : 'light');
+  const toggleTheme = () => setTheme((t) => (t === 'light' ? 'dark' : 'light'));
 
   // Load notes and tags
   const refresh = async () => {
@@ -46,10 +49,40 @@ export function NotesApp() {
     return () => window.removeEventListener('hashchange', onHashChange);
   }, []);
 
-  const filteredNotes = useMemo(() => {
-    if (!activeTag) return notes;
-    return notes.filter(n => (n.tags || []).includes(activeTag));
-  }, [notes, activeTag]);
+  const sortedAndFilteredNotes = useMemo(() => {
+    let result = notes;
+    if (activeTag) {
+      result = result.filter((n) => (n.tags || []).includes(activeTag));
+    }
+
+    // Apply additional sorting based on sortBy.
+    // NotesService.list() already returns pinned-first, updatedAt desc.
+    if (sortBy === 'updated') {
+      // Recently updated overall (still keep pinned above unpinned)
+      const copy = [...result];
+      copy.sort((a, b) => {
+        const aPinned = a.pinned ? 1 : 0;
+        const bPinned = b.pinned ? 1 : 0;
+        if (aPinned !== bPinned) return bPinned - aPinned;
+        return new Date(b.updatedAt) - new Date(a.updatedAt);
+      });
+      return copy;
+    }
+
+    if (sortBy === 'title') {
+      const copy = [...result];
+      copy.sort((a, b) => {
+        const aPinned = a.pinned ? 1 : 0;
+        const bPinned = b.pinned ? 1 : 0;
+        if (aPinned !== bPinned) return bPinned - aPinned;
+        return a.title.localeCompare(b.title);
+      });
+      return copy;
+    }
+
+    // Default 'pinned' just relies on NotesService.list() ordering
+    return result;
+  }, [notes, activeTag, sortBy]);
 
   async function onCreate(data) {
     await NotesService.create(data);
@@ -70,12 +103,22 @@ export function NotesApp() {
     await refresh();
   }
 
+  async function onTogglePinned(id) {
+    const note = notes.find((n) => n.id === id);
+    if (!note) return;
+    await NotesService.update(id, { pinned: !note.pinned });
+    await refresh();
+  }
+
+  async function onToggleFavorite(id) {
+    const note = notes.find((n) => n.id === id);
+    if (!note) return;
+    await NotesService.update(id, { favorite: !note.favorite });
+    await refresh();
+  }
+
   const sidebarEl = (
-    <Sidebar
-      tags={tags}
-      activeTag={activeTag}
-      onSelectTag={setActiveTag}
-    />
+    <Sidebar tags={tags} activeTag={activeTag} onSelectTag={setActiveTag} />
   );
 
   function onNewClick() {
@@ -86,7 +129,7 @@ export function NotesApp() {
     sidebar: sidebarEl,
     onNewClick: onNewClick,
     currentTheme: theme,
-    onToggleTheme: toggleTheme
+    onToggleTheme: toggleTheme,
   };
 
   // Route rendering
@@ -102,7 +145,7 @@ export function NotesApp() {
   }
 
   if (route.name === 'edit') {
-    const current = notes.find(n => n.id === route.params?.id);
+    const current = notes.find((n) => n.id === route.params?.id);
     return (
       <Layout {...layoutProps}>
         <NoteEditor
@@ -118,12 +161,16 @@ export function NotesApp() {
   return (
     <Layout {...layoutProps}>
       <NoteList
-        notes={filteredNotes}
+        notes={sortedAndFilteredNotes}
         onEdit={(id) => navigate(routes.edit(id))}
         onOpen={(id) => navigate(routes.edit(id))}
         onDelete={onDelete}
+        onTogglePinned={onTogglePinned}
+        onToggleFavorite={onToggleFavorite}
         search={search}
         setSearch={setSearch}
+        sortBy={sortBy}
+        setSortBy={setSortBy}
       />
     </Layout>
   );

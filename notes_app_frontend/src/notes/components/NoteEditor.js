@@ -8,6 +8,12 @@ export function NoteEditor({ initial, onSave, onCancel }) {
   const [title, setTitle] = useState(initial?.title || '');
   const [content, setContent] = useState(initial?.content || '');
   const [tags, setTags] = useState((initial?.tags || []).join(', '));
+  const [pinned, setPinned] = useState(
+    typeof initial?.pinned === 'boolean' ? initial.pinned : false
+  );
+  const [favorite, setFavorite] = useState(
+    typeof initial?.favorite === 'boolean' ? initial.favorite : false
+  );
   const [error, setError] = useState('');
   const [isPreview, setIsPreview] = useState(false);
   const titleRef = useRef(null);
@@ -28,7 +34,8 @@ export function NoteEditor({ initial, onSave, onCancel }) {
     const start = textarea.selectionStart;
     const end = textarea.selectionEnd;
 
-    const newContent = content.substring(0, start) + text + content.substring(end);
+    const newContent =
+      content.substring(0, start) + text + content.substring(end);
     setContent(newContent);
 
     // Set cursor position after the inserted text.
@@ -117,7 +124,7 @@ export function NoteEditor({ initial, onSave, onCancel }) {
   function toTags(str) {
     return str
       .split(',')
-      .map(t => t.trim())
+      .map((t) => t.trim())
       .filter(Boolean);
   }
 
@@ -131,34 +138,44 @@ export function NoteEditor({ initial, onSave, onCancel }) {
       title: title.trim(),
       content,
       tags: toTags(tags),
+      pinned,
+      favorite,
     });
   }
 
   // Lightweight Markdown Parser
   function parseMarkdown(text) {
     if (!text) return '';
-    
-    const escapeHtml = (str) => str
-      .replace(/&/g, "&amp;")
-      .replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;")
-      .replace(/"/g, "&quot;")
-      .replace(/'/g, "&#039;");
 
-    const parseInline = (text) => {
+    const escapeHtml = (str) =>
+      str
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+
+    const parseInline = (value) => {
+      let inner = value;
       // Images: ![alt](url)
-      text = text.replace(/!\[(.*?)\]\((.*?)\)/g, '<img src="$2" alt="$1" />');
+      inner = inner.replace(
+        /!\[(.*?)\]\((.*?)\)/g,
+        '<img src="$2" alt="$1" />'
+      );
       // Links: [text](url)
-      text = text.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>');
+      inner = inner.replace(
+        /\[([^\]]+)\]\(([^)]+)\)/g,
+        '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>'
+      );
       // Bold
-      text = text.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
-      text = text.replace(/__(.*?)__/g, '<strong>$1</strong>');
+      inner = inner.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+      inner = inner.replace(/__(.*?)__/g, '<strong>$1</strong>');
       // Italics
-      text = text.replace(/\*(.*?)\*/g, '<em>$1</em>');
-      text = text.replace(/_(.*?)_/g, '<em>$1</em>');
+      inner = inner.replace(/\*(.*?)\*/g, '<em>$1</em>');
+      inner = inner.replace(/_(.*?)_/g, '<em>$1</em>');
       // Inline Code
-      text = text.replace(/`([^`]+)`/g, '<code>$1</code>');
-      return text;
+      inner = inner.replace(/`([^`]+)`/g, '<code>$1</code>');
+      return inner;
     };
 
     const lines = text.split('\n');
@@ -170,52 +187,60 @@ export function NoteEditor({ initial, onSave, onCancel }) {
 
     const flushTable = () => {
       if (tableBuffer.length === 0) return;
-      
-      const rows = tableBuffer.map(row => 
-        row.trim().replace(/^\||\|$/g, '').split('|').map(c => c.trim())
+
+      const rows = tableBuffer.map((row) =>
+        row
+          .trim()
+          .replace(/^\||\|$/g, '')
+          .split('|')
+          .map((c) => c.trim())
       );
-      
+
       let html = '<div class="table-container"><table>';
-      
+
       // Check for separator line (e.g., |---|---|)
       let separatorIndex = -1;
       for (let i = 0; i < rows.length; i++) {
-         const isSeparator = tableBuffer[i].replace(/[|\-:\s]/g, '') === '';
-         if (isSeparator && i > 0) {
-             separatorIndex = i;
-             break;
-         }
+        const isSeparator =
+          tableBuffer[i].replace(/[|\-:\s]/g, '') === '';
+        if (isSeparator && i > 0) {
+          separatorIndex = i;
+          break;
+        }
       }
-      
+
       if (separatorIndex !== -1) {
-          // Header
-          html += '<thead><tr>';
-          rows[0].forEach(cell => {
-              html += `<th>${parseInline(escapeHtml(cell))}</th>`;
+        // Header
+        html += '<thead><tr>';
+        rows[0].forEach((cell) => {
+          html += `<th>${parseInline(escapeHtml(cell))}</th>`;
+        });
+        html += '</tr></thead><tbody>';
+
+        // Body
+        for (let i = 1; i < rows.length; i++) {
+          if (i === separatorIndex) continue;
+          html += '<tr>';
+          rows[i].forEach((cell) => {
+            html += `<td>${parseInline(escapeHtml(cell))}</td>`;
           });
-          html += '</tr></thead><tbody>';
-          
-          // Body
-          for (let i = 1; i < rows.length; i++) {
-              if (i === separatorIndex) continue;
-              html += '<tr>';
-              rows[i].forEach(cell => {
-                  html += `<td>${parseInline(escapeHtml(cell))}</td>`;
-              });
-              html += '</tr>';
-          }
-          html += '</tbody>';
+          html += '</tr>';
+        }
+        html += '</tbody>';
       } else {
-          // No header detected, treat all as body
-          html += '<tbody>';
-          rows.forEach(r => {
-              html += '<tr>';
-              r.forEach(c => html += `<td>${parseInline(escapeHtml(c))}</td>`);
-              html += '</tr>';
-          });
-          html += '</tbody>';
+        // No header detected, treat all as body
+        html += '<tbody>';
+        rows.forEach((r) => {
+          html += '<tr>';
+          r.forEach(
+            (c) =>
+              (html += `<td>${parseInline(escapeHtml(c))}</td>`)
+          );
+          html += '</tr>';
+        });
+        html += '</tbody>';
       }
-      
+
       html += '</table></div>';
       output.push(html);
       tableBuffer = [];
@@ -227,7 +252,11 @@ export function NoteEditor({ initial, onSave, onCancel }) {
       // Code Blocks
       if (line.trim().startsWith('```')) {
         flushTable();
-        if (inList) { output.push(listType === 'ul' ? '</ul>' : '</ol>'); inList = false; listType = null; }
+        if (inList) {
+          output.push(listType === 'ul' ? '</ul>' : '</ol>');
+          inList = false;
+          listType = null;
+        }
 
         if (inCodeBlock) {
           output.push('</code></pre>');
@@ -245,7 +274,11 @@ export function NoteEditor({ initial, onSave, onCancel }) {
 
       // Table Detection (lines starting with |)
       if (line.trim().startsWith('|')) {
-        if (inList) { output.push(listType === 'ul' ? '</ul>' : '</ol>'); inList = false; listType = null; }
+        if (inList) {
+          output.push(listType === 'ul' ? '</ul>' : '</ol>');
+          inList = false;
+          listType = null;
+        }
         tableBuffer.push(line);
         continue;
       } else {
@@ -254,27 +287,36 @@ export function NoteEditor({ initial, onSave, onCancel }) {
 
       // Horizontal Rule
       if (line.trim() === '---' || line.trim() === '***') {
-        if (inList) { output.push(listType === 'ul' ? '</ul>' : '</ol>'); inList = false; listType = null; }
+        if (inList) {
+          output.push(listType === 'ul' ? '</ul>' : '</ol>');
+          inList = false;
+          listType = null;
+        }
         output.push('<hr />');
         continue;
       }
 
       // Lists & Task Lists
-      const taskMatch = line.match(/^\s*(-|\d+\.)\s+\[([ xX])\]\s+(.*)/);
+      const taskMatch = line.match(
+        /^\s*(-|\d+\.)\s+\[([ xX])\]\s+(.*)/
+      );
       const isUl = /^\s*-\s+(.*)/.test(line);
       const isOl = /^\s*\d+\.\s+(.*)/.test(line);
 
       if (isUl || isOl) {
-        let content, currentType, isTask = false, isChecked = false;
+        let itemContent;
+        let currentType;
+        let isTask = false;
+        let isChecked = false;
 
         if (taskMatch) {
-            isTask = true;
-            isChecked = taskMatch[2].toLowerCase() === 'x';
-            content = taskMatch[3];
-            currentType = 'ul';
+          isTask = true;
+          isChecked = taskMatch[2].toLowerCase() === 'x';
+          itemContent = taskMatch[3];
+          currentType = 'ul';
         } else {
-            content = line.replace(/^\s*(-|\d+\.)\s+/, '');
-            currentType = isUl ? 'ul' : 'ol';
+          itemContent = line.replace(/^\s*(-|\d+\.)\s+/, '');
+          currentType = isUl ? 'ul' : 'ol';
         }
 
         if (!inList) {
@@ -286,16 +328,24 @@ export function NoteEditor({ initial, onSave, onCancel }) {
           output.push(`<${currentType}>`);
           listType = currentType;
         }
-        
+
         if (isTask) {
-             const checkbox = `<input type="checkbox" data-line-index="${i}" ${isChecked ? 'checked' : ''} aria-label="Toggle task" />`;
-             output.push(`<li class="task-list-item">${checkbox} <span>${parseInline(escapeHtml(content))}</span></li>`);
+          const checkbox = `<input type="checkbox" data-line-index="${i}" ${
+            isChecked ? 'checked' : ''
+          } aria-label="Toggle task" />`;
+          output.push(
+            `<li class="task-list-item">${checkbox} <span>${parseInline(
+              escapeHtml(itemContent)
+            )}</span></li>`
+          );
         } else {
-             output.push(`<li>${parseInline(escapeHtml(content))}</li>`);
+          output.push(
+            `<li>${parseInline(escapeHtml(itemContent))}</li>`
+          );
         }
         continue;
       }
-      
+
       if (inList) {
         output.push(listType === 'ul' ? '</ul>' : '</ol>');
         inList = false;
@@ -304,21 +354,31 @@ export function NoteEditor({ initial, onSave, onCancel }) {
 
       // Headings
       if (line.startsWith('# ')) {
-        output.push(`<h1>${parseInline(escapeHtml(line.slice(2)))}</h1>`);
+        output.push(
+          `<h1>${parseInline(escapeHtml(line.slice(2)))}</h1>`
+        );
         continue;
       }
       if (line.startsWith('## ')) {
-        output.push(`<h2>${parseInline(escapeHtml(line.slice(3)))}</h2>`);
+        output.push(
+          `<h2>${parseInline(escapeHtml(line.slice(3)))}</h2>`
+        );
         continue;
       }
       if (line.startsWith('### ')) {
-        output.push(`<h3>${parseInline(escapeHtml(line.slice(4)))}</h3>`);
+        output.push(
+          `<h3>${parseInline(escapeHtml(line.slice(4)))}</h3>`
+        );
         continue;
       }
 
       // Blockquotes
       if (line.startsWith('> ')) {
-        output.push(`<blockquote>${parseInline(escapeHtml(line.slice(2)))}</blockquote>`);
+        output.push(
+          `<blockquote>${parseInline(
+            escapeHtml(line.slice(2))
+          )}</blockquote>`
+        );
         continue;
       }
 
@@ -354,31 +414,83 @@ export function NoteEditor({ initial, onSave, onCancel }) {
             type="text"
             placeholder="Enter a title"
             value={title}
-            onChange={e => setTitle(e.target.value)}
+            onChange={(e) => setTitle(e.target.value)}
             aria-invalid={error ? 'true' : 'false'}
             aria-describedby={error ? 'title-error' : undefined}
           />
         </label>
         {error && (
-          <div id="title-error" style={{ color: 'var(--color-error)', fontSize: 13 }}>
+          <div
+            id="title-error"
+            style={{ color: 'var(--color-error)', fontSize: 13 }}
+          >
             {error}
           </div>
         )}
-        
+
+        <div
+          role="group"
+          aria-label="Note flags"
+          className="editor-flags"
+          style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}
+        >
+          <button
+            type="button"
+            className="btn btn-toggle"
+            onClick={() => setPinned((v) => !v)}
+            aria-pressed={pinned}
+          >
+            <span
+              aria-hidden="true"
+              style={{
+                display: 'inline-block',
+                width: 16,
+                textAlign: 'center',
+              }}
+            >
+              {pinned ? '📌' : '📍'}
+            </span>
+            {pinned ? 'Pinned' : 'Pin note'}
+          </button>
+          <button
+            type="button"
+            className="btn btn-toggle"
+            onClick={() => setFavorite((v) => !v)}
+            aria-pressed={favorite}
+          >
+            <span
+              aria-hidden="true"
+              style={{
+                display: 'inline-block',
+                width: 16,
+                textAlign: 'center',
+              }}
+            >
+              {favorite ? '★' : '☆'}
+            </span>
+            {favorite ? 'Favorited' : 'Mark favorite'}
+          </button>
+        </div>
+
         <div role="group" aria-label="Editor mode" className="editor-group">
           <div className="editor-header">
-            <label className="input-label" style={{ marginBottom: 4 }}>Content</label>
+            <label
+              className="input-label"
+              style={{ marginBottom: 4 }}
+            >
+              Content
+            </label>
             <div className="tab-group">
-              <button 
-                type="button" 
+              <button
+                type="button"
                 className={`tab-btn ${!isPreview ? 'active' : ''}`}
                 onClick={() => setIsPreview(false)}
                 aria-pressed={!isPreview}
               >
                 Write
               </button>
-              <button 
-                type="button" 
+              <button
+                type="button"
                 className={`tab-btn ${isPreview ? 'active' : ''}`}
                 onClick={() => setIsPreview(true)}
                 aria-pressed={isPreview}
@@ -387,11 +499,15 @@ export function NoteEditor({ initial, onSave, onCancel }) {
               </button>
             </div>
           </div>
-          
+
           <div className="editor-panes">
-            <div className={`editor-pane write-pane ${isPreview ? 'hidden-mobile' : ''}`}>
+            <div
+              className={`editor-pane write-pane ${
+                isPreview ? 'hidden-mobile' : ''
+              }`}
+            >
               <div className="pane-header">Write</div>
-               <div className="editor-toolbar">
+              <div className="editor-toolbar">
                 <button
                   type="button"
                   className="btn-toolbar"
@@ -415,17 +531,25 @@ export function NoteEditor({ initial, onSave, onCancel }) {
                 className="textarea"
                 placeholder="Jot down your thoughts… (Markdown supported)"
                 value={content}
-                onChange={e => setContent(e.target.value)}
+                onChange={(e) => setContent(e.target.value)}
                 onPaste={handlePaste}
                 aria-label="Content editor"
               />
             </div>
-            
-            <div className={`editor-pane preview-pane ${!isPreview ? 'hidden-mobile' : ''}`}>
+
+            <div
+              className={`editor-pane preview-pane ${
+                !isPreview ? 'hidden-mobile' : ''
+              }`}
+            >
               <div className="pane-header">Preview</div>
-              <div 
-                className="markdown-preview" 
-                dangerouslySetInnerHTML={{ __html: parseMarkdown(content) || '<p style="color:var(--muted)">Nothing to preview</p>' }}
+              <div
+                className="markdown-preview"
+                dangerouslySetInnerHTML={{
+                  __html:
+                    parseMarkdown(content) ||
+                    '<p style="color:var(--muted)">Nothing to preview</p>',
+                }}
                 aria-label="Markdown preview"
                 tabIndex={0}
                 onClick={handlePreviewClick}
@@ -441,7 +565,7 @@ export function NoteEditor({ initial, onSave, onCancel }) {
             type="text"
             placeholder="work, personal, ideas"
             value={tags}
-            onChange={e => setTags(e.target.value)}
+            onChange={(e) => setTags(e.target.value)}
           />
         </label>
 
