@@ -269,9 +269,9 @@ export function NoteEditor({ initial, onSave, onCancel }) {
           </div>
         )}
         
-        <div role="group" aria-label="Editor mode">
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <label style={{ marginBottom: 4, display: 'block' }}>Content</label>
+        <div role="group" aria-label="Editor mode" className="editor-group">
+          <div className="editor-header">
+            <label className="input-label" style={{ marginBottom: 4 }}>Content</label>
             <div className="tab-group">
               <button 
                 type="button" 
@@ -292,22 +292,28 @@ export function NoteEditor({ initial, onSave, onCancel }) {
             </div>
           </div>
           
-          {isPreview ? (
-            <div 
-              className="markdown-preview" 
-              dangerouslySetInnerHTML={{ __html: parseMarkdown(content) || '<p style="color:var(--muted)">Nothing to preview</p>' }}
-              aria-label="Markdown preview"
-              tabIndex={0}
-            />
-          ) : (
-            <textarea
-              className="textarea"
-              placeholder="Jot down your thoughts… (Markdown supported)"
-              value={content}
-              onChange={e => setContent(e.target.value)}
-              aria-label="Content editor"
-            />
-          )}
+          <div className="editor-panes">
+            <div className={`editor-pane write-pane ${isPreview ? 'hidden-mobile' : ''}`}>
+              <div className="pane-header">Write</div>
+              <textarea
+                className="textarea"
+                placeholder="Jot down your thoughts… (Markdown supported)"
+                value={content}
+                onChange={e => setContent(e.target.value)}
+                aria-label="Content editor"
+              />
+            </div>
+            
+            <div className={`editor-pane preview-pane ${!isPreview ? 'hidden-mobile' : ''}`}>
+              <div className="pane-header">Preview</div>
+              <div 
+                className="markdown-preview" 
+                dangerouslySetInnerHTML={{ __html: parseMarkdown(content) || '<p style="color:var(--muted)">Nothing to preview</p>' }}
+                aria-label="Markdown preview"
+                tabIndex={0}
+              />
+            </div>
+          </div>
         </div>
 
         <label>
