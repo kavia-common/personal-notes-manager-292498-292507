@@ -50,6 +50,10 @@ export function NoteEditor({ initial, onSave, onCancel }) {
       .replace(/'/g, "&#039;");
 
     const parseInline = (text) => {
+      // Images: ![alt](url)
+      text = text.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, '<img src="$2" alt="$1" />');
+      // Links: [text](url)
+      text = text.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>');
       // Bold
       text = text.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
       text = text.replace(/__(.*?)__/g, '<strong>$1</strong>');
@@ -58,8 +62,6 @@ export function NoteEditor({ initial, onSave, onCancel }) {
       text = text.replace(/_(.*?)_/g, '<em>$1</em>');
       // Inline Code
       text = text.replace(/`([^`]+)`/g, '<code>$1</code>');
-      // Links
-      text = text.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>');
       return text;
     };
 
@@ -68,12 +70,69 @@ export function NoteEditor({ initial, onSave, onCancel }) {
     let inList = false;
     let listType = null;
     let inCodeBlock = false;
+    let tableBuffer = [];
+
+    const flushTable = () => {
+      if (tableBuffer.length === 0) return;
+      
+      const rows = tableBuffer.map(row => 
+        row.trim().replace(/^\||\|$/g, '').split('|').map(c => c.trim())
+      );
+      
+      let html = '<div class="table-container"><table>';
+      
+      // Check for separator line (e.g., |---|---|)
+      let separatorIndex = -1;
+      for (let i = 0; i < rows.length; i++) {
+         const isSeparator = tableBuffer[i].replace(/[|\-\:\s]/g, '') === '';
+         if (isSeparator && i > 0) {
+             separatorIndex = i;
+             break;
+         }
+      }
+      
+      if (separatorIndex !== -1) {
+          // Header
+          html += '<thead><tr>';
+          rows[0].forEach(cell => {
+              html += `<th>${parseInline(escapeHtml(cell))}</th>`;
+          });
+          html += '</tr></thead><tbody>';
+          
+          // Body
+          for (let i = 1; i < rows.length; i++) {
+              if (i === separatorIndex) continue;
+              html += '<tr>';
+              rows[i].forEach(cell => {
+                  html += `<td>${parseInline(escapeHtml(cell))}</td>`;
+              });
+              html += '</tr>';
+          }
+          html += '</tbody>';
+      } else {
+          // No header detected, treat all as body
+          html += '<tbody>';
+          rows.forEach(r => {
+              html += '<tr>';
+              r.forEach(c => html += `<td>${parseInline(escapeHtml(c))}</td>`);
+              html += '</tr>';
+          });
+          html += '</tbody>';
+      }
+      
+      html += '</table></div>';
+      output.push(html);
+      tableBuffer = [];
+    };
 
     for (let i = 0; i < lines.length; i++) {
       let line = lines[i];
 
       // Code Blocks
       if (line.trim().startsWith('```')) {
+        flushTable();
+        if (inList) { output.push(listType === 'ul' ? '</ul>' : '</ol>'); inList = false; listType = null; }
+
         if (inCodeBlock) {
           output.push('</code></pre>');
           inCodeBlock = false;
@@ -88,21 +147,40 @@ export function NoteEditor({ initial, onSave, onCancel }) {
         continue;
       }
 
+      // Table Detection (lines starting with |)
+      if (line.trim().startsWith('|')) {
+        if (inList) { output.push(listType === 'ul' ? '</ul>' : '</ol>'); inList = false; listType = null; }
+        tableBuffer.push(line);
+        continue;
+      } else {
+        flushTable();
+      }
+
       // Horizontal Rule
-      if (line.trim() === '---') {
+      if (line.trim() === '---' || line.trim() === '***') {
         if (inList) { output.push(listType === 'ul' ? '</ul>' : '</ol>'); inList = false; listType = null; }
         output.push('<hr />');
         continue;
       }
 
-      // Lists
+      // Lists & Task Lists
+      const taskMatch = line.match(/^\s*(-|\d+\.)\s+\[([ xX])\]\s+(.*)/);
       const isUl = /^\s*-\s+(.*)/.test(line);
       const isOl = /^\s*\d+\.\s+(.*)/.test(line);
 
       if (isUl || isOl) {
-        const content = line.replace(/^\s*(-|\d+\.)\s+/, '');
-        const currentType = isUl ? 'ul' : 'ol';
-        
+        let content, currentType, isTask = false, isChecked = false;
+
+        if (taskMatch) {
+            isTask = true;
+            isChecked = taskMatch[2].toLowerCase() === 'x';
+            content = taskMatch[3];
+            currentType = 'ul';
+        } else {
+            content = line.replace(/^\s*(-|\d+\.)\s+/, '');
+            currentType = isUl ? 'ul' : 'ol';
+        }
+
         if (!inList) {
           output.push(`<${currentType}>`);
           inList = true;
@@ -112,7 +190,13 @@ export function NoteEditor({ initial, onSave, onCancel }) {
           output.push(`<${currentType}>`);
           listType = currentType;
         }
-        output.push(`<li>${parseInline(escapeHtml(content))}</li>`);
+        
+        if (isTask) {
+             const checkbox = `<input type="checkbox" ${isChecked ? 'checked' : ''} onclick="return false;" aria-label="Task item" />`;
+             output.push(`<li style="list-style: none; display: flex; align-items: start; gap: 8px;">${checkbox} <span>${parseInline(escapeHtml(content))}</span></li>`);
+        } else {
+             output.push(`<li>${parseInline(escapeHtml(content))}</li>`);
+        }
         continue;
       }
       
@@ -152,6 +236,7 @@ export function NoteEditor({ initial, onSave, onCancel }) {
       output.push(`<p>${parseInline(escapeHtml(line))}</p>`);
     }
 
+    flushTable();
     if (inList) {
       output.push(listType === 'ul' ? '</ul>' : '</ol>');
     }

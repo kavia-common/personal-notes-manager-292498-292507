@@ -425,3 +425,50 @@ a { color: inherit; }
     position: static;
   }
 }
+
+/* Extended Markdown Styles */
+.markdown-preview .table-container {
+  overflow-x: auto;
+  margin-bottom: 1em;
+}
+
+.markdown-preview table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 0;
+  font-size: 0.95em;
+}
+
+.markdown-preview th,
+.markdown-preview td {
+  border: 1px solid var(--border);
+  padding: 8px 12px;
+  text-align: left;
+}
+
+.markdown-preview th {
+  background: var(--surface);
+  font-weight: 600;
+  color: var(--text);
+}
+
+.markdown-preview tr:nth-child(even) {
+  background-color: var(--surface);
+}
+
+.markdown-preview img {
+  max-width: 100%;
+  height: auto;
+  display: block;
+  margin: 1.5em auto;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+}
+
+.markdown-preview input[type="checkbox"] {
+  margin-top: 0.3em;
+  accent-color: var(--accent);
+  cursor: default;
+  width: 1.1em;
+  height: 1.1em;
+}
