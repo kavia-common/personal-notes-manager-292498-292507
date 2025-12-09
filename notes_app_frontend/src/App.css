@@ -534,3 +534,16 @@ a { color: inherit; }
   width: 1.1em;
   height: 1.1em;
 }
+
+.markdown-preview .task-list-item {
+  list-style: none;
+  display: flex;
+  align-items: start;
+  gap: 8px;
+  margin-left: -20px; /* Counteract parent ul padding */
+}
+
+/* Allow clicking on task list items */
+.markdown-preview .task-list-item input[type="checkbox"] {
+  cursor: pointer;
+}

@@ -18,6 +18,30 @@ export function NoteEditor({ initial, onSave, onCancel }) {
     }
   }, [isPreview]);
 
+  // When a task checkbox in the preview is clicked, update the raw markdown.
+  function handlePreviewClick(e) {
+    const target = e.target;
+    if (
+      target.tagName === 'INPUT' &&
+      target.type === 'checkbox' &&
+      target.hasAttribute('data-line-index')
+    ) {
+      const lineIndex = parseInt(target.getAttribute('data-line-index'), 10);
+      const isChecked = target.checked;
+
+      const lines = content.split('\n');
+      if (lines[lineIndex] === undefined) return;
+
+      // Toggle the markdown task state
+      const updatedLine = lines[lineIndex].replace(
+        /\[[ xX]?\]/,
+        isChecked ? '[x]' : '[ ]'
+      );
+      lines[lineIndex] = updatedLine;
+      setContent(lines.join('\n'));
+    }
+  }
+
   function toTags(str) {
     return str
       .split(',')
@@ -84,7 +108,7 @@ export function NoteEditor({ initial, onSave, onCancel }) {
       // Check for separator line (e.g., |---|---|)
       let separatorIndex = -1;
       for (let i = 0; i < rows.length; i++) {
-         const isSeparator = tableBuffer[i].replace(/[|\-\:\s]/g, '') === '';
+         const isSeparator = tableBuffer[i].replace(/[|\-:\s]/g, '') === '';
          if (isSeparator && i > 0) {
              separatorIndex = i;
              break;
@@ -192,8 +216,8 @@ export function NoteEditor({ initial, onSave, onCancel }) {
         }
         
         if (isTask) {
-             const checkbox = `<input type="checkbox" ${isChecked ? 'checked' : ''} onclick="return false;" aria-label="Task item" />`;
-             output.push(`<li style="list-style: none; display: flex; align-items: start; gap: 8px;">${checkbox} <span>${parseInline(escapeHtml(content))}</span></li>`);
+             const checkbox = `<input type="checkbox" data-line-index="${i}" ${isChecked ? 'checked' : ''} aria-label="Toggle task" />`;
+             output.push(`<li class="task-list-item">${checkbox} <span>${parseInline(escapeHtml(content))}</span></li>`);
         } else {
              output.push(`<li>${parseInline(escapeHtml(content))}</li>`);
         }
@@ -311,6 +335,7 @@ export function NoteEditor({ initial, onSave, onCancel }) {
                 dangerouslySetInnerHTML={{ __html: parseMarkdown(content) || '<p style="color:var(--muted)">Nothing to preview</p>' }}
                 aria-label="Markdown preview"
                 tabIndex={0}
+                onClick={handlePreviewClick}
               />
             </div>
           </div>
