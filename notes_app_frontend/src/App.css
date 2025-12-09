@@ -547,3 +547,37 @@ a { color: inherit; }
 .markdown-preview .task-list-item input[type="checkbox"] {
   cursor: pointer;
 }
+
+/* Editor Toolbar */
+.editor-toolbar {
+  display: flex;
+  gap: 8px;
+  padding: 8px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-bottom: none;
+  border-top-left-radius: 10px;
+  border-top-right-radius: 10px;
+}
+
+.btn-toolbar {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 6px 10px;
+  font-size: 13px;
+  cursor: pointer;
+  color: var(--text);
+  transition: all .2s;
+}
+
+.btn-toolbar:hover {
+  background: var(--surface);
+  color: var(--accent);
+}
+
+.editor-toolbar + .textarea {
+  border-top-left-radius: 0;
+  border-top-right-radius: 0;
+  margin-top: -1px; /* Overlap borders */
+}

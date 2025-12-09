@@ -11,12 +11,84 @@ export function NoteEditor({ initial, onSave, onCancel }) {
   const [error, setError] = useState('');
   const [isPreview, setIsPreview] = useState(false);
   const titleRef = useRef(null);
+  const textareaRef = useRef(null);
+  const fileInputRef = useRef(null);
 
   useEffect(() => {
     if (!isPreview) {
       titleRef.current?.focus();
     }
   }, [isPreview]);
+
+  // Insert text at the textarea's cursor position.
+  function insertTextAtCursor(text) {
+    const textarea = textareaRef.current;
+    if (!textarea) return;
+
+    const start = textarea.selectionStart;
+    const end = textarea.selectionEnd;
+
+    const newContent = content.substring(0, start) + text + content.substring(end);
+    setContent(newContent);
+
+    // Set cursor position after the inserted text.
+    // Use a timeout to ensure the DOM has updated.
+    setTimeout(() => {
+      textarea.selectionStart = textarea.selectionEnd = start + text.length;
+      textarea.focus();
+    }, 0);
+  }
+
+  // Process an image file to a data URL and insert it into the editor.
+  function processImageFile(file, altText = 'image') {
+    if (file && file.type.startsWith('image/')) {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const dataUrl = e.target.result;
+        const markdown = `![${altText}](${dataUrl})`;
+        insertTextAtCursor(markdown);
+      };
+      reader.readAsDataURL(file);
+      return true;
+    }
+    return false;
+  }
+
+  // Trigger the hidden file input.
+  function handleImageButtonClick() {
+    fileInputRef.current?.click();
+  }
+
+  // Handle file selection from the file input.
+  function handleFileChange(event) {
+    const file = event.target.files?.[0];
+    if (file) {
+      processImageFile(file, file.name);
+    }
+    // Clear the input value so the same file can be selected again.
+    if (event.target) {
+      event.target.value = '';
+    }
+  }
+
+  // Handle pasting content, specifically looking for images.
+  function handlePaste(event) {
+    const items = event.clipboardData?.items;
+    if (!items) return;
+
+    for (let i = 0; i < items.length; i++) {
+      if (items[i].type.indexOf('image') !== -1) {
+        const file = items[i].getAsFile();
+        if (file) {
+          if (processImageFile(file, 'pasted-image')) {
+            // Prevent the default paste action if an image was handled.
+            event.preventDefault();
+            break; // Handle only the first image.
+          }
+        }
+      }
+    }
+  }
 
   // When a task checkbox in the preview is clicked, update the raw markdown.
   function handlePreviewClick(e) {
@@ -75,7 +147,7 @@ export function NoteEditor({ initial, onSave, onCancel }) {
 
     const parseInline = (text) => {
       // Images: ![alt](url)
-      text = text.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, '<img src="$2" alt="$1" />');
+      text = text.replace(/!\[(.*?)\]\((.*?)\)/g, '<img src="$2" alt="$1" />');
       // Links: [text](url)
       text = text.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>');
       // Bold
@@ -319,11 +391,32 @@ export function NoteEditor({ initial, onSave, onCancel }) {
           <div className="editor-panes">
             <div className={`editor-pane write-pane ${isPreview ? 'hidden-mobile' : ''}`}>
               <div className="pane-header">Write</div>
+               <div className="editor-toolbar">
+                <button
+                  type="button"
+                  className="btn-toolbar"
+                  onClick={handleImageButtonClick}
+                  aria-label="Insert image"
+                  title="Insert image"
+                >
+                  Insert Image
+                </button>
+                <input
+                  type="file"
+                  ref={fileInputRef}
+                  onChange={handleFileChange}
+                  accept="image/*"
+                  style={{ display: 'none' }}
+                  aria-hidden="true"
+                />
+              </div>
               <textarea
+                ref={textareaRef}
                 className="textarea"
                 placeholder="Jot down your thoughts… (Markdown supported)"
                 value={content}
                 onChange={e => setContent(e.target.value)}
+                onPaste={handlePaste}
                 aria-label="Content editor"
               />
             </div>
