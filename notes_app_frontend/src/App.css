@@ -16,6 +16,16 @@
   --ring: var(--accent);
 }
 
+[data-theme='dark'] {
+  --bg: #000000;
+  --surface: #111111;
+  --text: #ffffff;
+  --muted: #a3a3a3;
+  --border: #333333;
+  --accent: #ffffff;
+  --accent-contrast: #000000;
+}
+
 * { box-sizing: border-box; }
 
 html, body, #root {

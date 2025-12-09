@@ -18,6 +18,16 @@ export function NotesApp() {
   const [activeTag, setActiveTag] = useState(null);
   const [search, setSearch] = useState('');
 
+  // Theme state
+  const [theme, setTheme] = useState(() => localStorage.getItem('notes_theme') || 'light');
+
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', theme);
+    localStorage.setItem('notes_theme', theme);
+  }, [theme]);
+
+  const toggleTheme = () => setTheme(t => t === 'light' ? 'dark' : 'light');
+
   // Load notes and tags
   const refresh = async () => {
     const [n, t] = await Promise.all([NotesService.list(), NotesService.tags()]);
@@ -72,10 +82,17 @@ export function NotesApp() {
     navigate(routes.new);
   }
 
+  const layoutProps = {
+    sidebar: sidebarEl,
+    onNewClick: onNewClick,
+    currentTheme: theme,
+    onToggleTheme: toggleTheme
+  };
+
   // Route rendering
   if (route.name === 'new') {
     return (
-      <Layout sidebar={sidebarEl} onNewClick={onNewClick}>
+      <Layout {...layoutProps}>
         <NoteEditor
           onSave={onCreate}
           onCancel={() => navigate(routes.home)}
@@ -87,7 +104,7 @@ export function NotesApp() {
   if (route.name === 'edit') {
     const current = notes.find(n => n.id === route.params?.id);
     return (
-      <Layout sidebar={sidebarEl} onNewClick={onNewClick}>
+      <Layout {...layoutProps}>
         <NoteEditor
           initial={current}
           onSave={(patch) => onUpdate(route.params.id, patch)}
@@ -99,7 +116,7 @@ export function NotesApp() {
 
   // home/list
   return (
-    <Layout sidebar={sidebarEl} onNewClick={onNewClick}>
+    <Layout {...layoutProps}>
       <NoteList
         notes={filteredNotes}
         onEdit={(id) => navigate(routes.edit(id))}
