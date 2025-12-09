@@ -7,6 +7,114 @@ import { NoteEditor } from './components/NoteEditor';
 import { NotesService } from './api/NotesService';
 import { navigate, parseLocation, routes } from './router';
 
+const FILTERS_STORAGE_KEY = 'notes_filters';
+
+/**
+ * Safely load persisted filters from localStorage.
+ */
+function loadPersistedFilters() {
+  try {
+    const raw = localStorage.getItem(FILTERS_STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (typeof parsed !== 'object' || parsed === null) return null;
+
+    return {
+      selectedTags: Array.isArray(parsed.selectedTags) ? parsed.selectedTags : [],
+      favoritesOnly: Boolean(parsed.favoritesOnly),
+      pinnedOnly: Boolean(parsed.pinnedOnly),
+      search: typeof parsed.search === 'string' ? parsed.search : '',
+      sortBy: typeof parsed.sortBy === 'string' ? parsed.sortBy : 'pinned',
+    };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Persist filters to localStorage.
+ */
+function persistFilters(filters) {
+  try {
+    const payload = {
+      selectedTags: filters.selectedTags,
+      favoritesOnly: filters.favoritesOnly,
+      pinnedOnly: filters.pinnedOnly,
+      search: filters.search,
+      sortBy: filters.sortBy,
+    };
+    localStorage.setItem(FILTERS_STORAGE_KEY, JSON.stringify(payload));
+  } catch {
+    // ignore persistence errors
+  }
+}
+
+/**
+ * Apply filters, then search, then sort to the notes list.
+ */
+function selectVisibleNotes(notes, filters) {
+  const {
+    selectedTags = [],
+    favoritesOnly = false,
+    pinnedOnly = false,
+    search = '',
+    sortBy = 'pinned',
+  } = filters || {};
+
+  let result = Array.isArray(notes) ? [...notes] : [];
+
+  // 1. Tag filter: keep notes that have ANY of the selected tags.
+  if (selectedTags.length > 0) {
+    const set = new Set(selectedTags);
+    result = result.filter((n) => (n.tags || []).some((t) => set.has(t)));
+  }
+
+  // 2. Favorites / Pinned toggles
+  if (favoritesOnly) {
+    result = result.filter((n) => Boolean(n.favorite));
+  }
+  if (pinnedOnly) {
+    result = result.filter((n) => Boolean(n.pinned));
+  }
+
+  // 3. Text search within filtered set
+  const q = (search || '').trim().toLowerCase();
+  if (q) {
+    result = result.filter((n) => {
+      const title = (n.title || '').toLowerCase();
+      const content = (n.content || '').toLowerCase();
+      const tagsText = (n.tags || []).join(' ').toLowerCase();
+      return (
+        title.includes(q) ||
+        content.includes(q) ||
+        tagsText.includes(q)
+      );
+    });
+  }
+
+  // 4. Sorting
+  if (sortBy === 'updated') {
+    result.sort((a, b) => {
+      const aPinned = a.pinned ? 1 : 0;
+      const bPinned = b.pinned ? 1 : 0;
+      if (aPinned !== bPinned) return bPinned - aPinned;
+      return new Date(b.updatedAt) - new Date(a.updatedAt);
+    });
+  } else if (sortBy === 'title') {
+    result.sort((a, b) => {
+      const aPinned = a.pinned ? 1 : 0;
+      const bPinned = b.pinned ? 1 : 0;
+      if (aPinned !== bPinned) return bPinned - aPinned;
+      return (a.title || '').localeCompare(b.title || '');
+    });
+  }
+  // sortBy === 'pinned' uses the existing NotesService.list() order,
+  // which comes in as pinned-first / updated desc. We already copied
+  // notes above, but we keep original relative ordering for this case.
+
+  return result;
+}
+
 /**
  * Main Notes Application with simple hash-based routing and localStorage persistence.
  */
@@ -16,8 +124,20 @@ export function NotesApp() {
   const [notes, setNotes] = useState([]);
   const [tags, setTags] = useState([]);
   const [activeTag, setActiveTag] = useState(null);
-  const [search, setSearch] = useState('');
-  const [sortBy, setSortBy] = useState('pinned'); // 'pinned' | 'updated' | 'title'
+
+  // Filters and UI state
+  const persisted = loadPersistedFilters();
+  const [selectedTags, setSelectedTags] = useState(
+    persisted?.selectedTags || []
+  );
+  const [favoritesOnly, setFavoritesOnly] = useState(
+    persisted?.favoritesOnly || false
+  );
+  const [pinnedOnly, setPinnedOnly] = useState(
+    persisted?.pinnedOnly || false
+  );
+  const [search, setSearch] = useState(persisted?.search || '');
+  const [sortBy, setSortBy] = useState(persisted?.sortBy || 'pinned'); // 'pinned' | 'updated' | 'title'
 
   // Theme state
   const [theme, setTheme] = useState(
@@ -29,7 +149,7 @@ export function NotesApp() {
     localStorage.setItem('notes_theme', theme);
   }, [theme]);
 
-  const toggleTheme = () => setTheme((t) => (t === 'light' ? 'dark' : 'light'));
+  const toggleTheme = () => setTheme((t) => (t === 'light' ? 'dark' : 'dark' === t ? 'light' : 'light'));
 
   // Load notes and tags
   const refresh = async () => {
@@ -49,40 +169,30 @@ export function NotesApp() {
     return () => window.removeEventListener('hashchange', onHashChange);
   }, []);
 
-  const sortedAndFilteredNotes = useMemo(() => {
-    let result = notes;
-    if (activeTag) {
-      result = result.filter((n) => (n.tags || []).includes(activeTag));
-    }
+  // Keep filters in localStorage
+  useEffect(() => {
+    persistFilters({ selectedTags, favoritesOnly, pinnedOnly, search, sortBy });
+  }, [selectedTags, favoritesOnly, pinnedOnly, search, sortBy]);
 
-    // Apply additional sorting based on sortBy.
-    // NotesService.list() already returns pinned-first, updatedAt desc.
-    if (sortBy === 'updated') {
-      // Recently updated overall (still keep pinned above unpinned)
-      const copy = [...result];
-      copy.sort((a, b) => {
-        const aPinned = a.pinned ? 1 : 0;
-        const bPinned = b.pinned ? 1 : 0;
-        if (aPinned !== bPinned) return bPinned - aPinned;
-        return new Date(b.updatedAt) - new Date(a.updatedAt);
-      });
-      return copy;
-    }
+  // Map the legacy sidebar "activeTag" to the new selectedTags filter.
+  useEffect(() => {
+    if (activeTag == null) return;
+    setSelectedTags((prev) =>
+      prev.includes(activeTag) ? prev : [...prev, activeTag]
+    );
+  }, [activeTag]);
 
-    if (sortBy === 'title') {
-      const copy = [...result];
-      copy.sort((a, b) => {
-        const aPinned = a.pinned ? 1 : 0;
-        const bPinned = b.pinned ? 1 : 0;
-        if (aPinned !== bPinned) return bPinned - aPinned;
-        return a.title.localeCompare(b.title);
-      });
-      return copy;
-    }
-
-    // Default 'pinned' just relies on NotesService.list() ordering
-    return result;
-  }, [notes, activeTag, sortBy]);
+  const visibleNotes = useMemo(
+    () =>
+      selectVisibleNotes(notes, {
+        selectedTags,
+        favoritesOnly,
+        pinnedOnly,
+        search,
+        sortBy,
+      }),
+    [notes, selectedTags, favoritesOnly, pinnedOnly, search, sortBy]
+  );
 
   async function onCreate(data) {
     await NotesService.create(data);
@@ -161,7 +271,14 @@ export function NotesApp() {
   return (
     <Layout {...layoutProps}>
       <NoteList
-        notes={sortedAndFilteredNotes}
+        notes={visibleNotes}
+        allTags={tags}
+        selectedTags={selectedTags}
+        setSelectedTags={setSelectedTags}
+        favoritesOnly={favoritesOnly}
+        setFavoritesOnly={setFavoritesOnly}
+        pinnedOnly={pinnedOnly}
+        setPinnedOnly={setPinnedOnly}
         onEdit={(id) => navigate(routes.edit(id))}
         onOpen={(id) => navigate(routes.edit(id))}
         onDelete={onDelete}

@@ -250,6 +250,31 @@ a { color: inherit; }
   gap: 8px;
 }
 
+/* Filter chips */
+.filter-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  font-size: 12px;
+  color: var(--text);
+  cursor: default;
+}
+
+.filter-chip button,
+.filter-chip[role="button"],
+button.filter-chip {
+  cursor: pointer;
+  background: var(--bg);
+}
+
+button.filter-chip:hover {
+  border-color: var(--accent);
+}
+
 /* Small flag icons next to titles */
 .note-flag {
   font-size: 0.9em;

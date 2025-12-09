@@ -1,11 +1,18 @@
 import React from 'react';
 
 /**
- * List of notes with actions.
+ * List of notes with actions and filter controls.
  */
 // PUBLIC_INTERFACE
 export function NoteList({
   notes,
+  allTags = [],
+  selectedTags,
+  setSelectedTags,
+  favoritesOnly,
+  setFavoritesOnly,
+  pinnedOnly,
+  setPinnedOnly,
   onEdit,
   onDelete,
   onOpen,
@@ -16,19 +23,28 @@ export function NoteList({
   sortBy,
   setSortBy,
 }) {
-  const filtered = notes.filter((n) => {
-    const q = (search || '').toLowerCase();
-    if (!q) return true;
-    return (
-      n.title.toLowerCase().includes(q) ||
-      (n.content || '').toLowerCase().includes(q) ||
-      (n.tags || []).some((t) => t.toLowerCase().includes(q))
+  function handleTagToggle(tag) {
+    setSelectedTags((prev) =>
+      prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag]
     );
-  });
+  }
+
+  function handleClearFilters() {
+    setSelectedTags([]);
+    setFavoritesOnly(false);
+    setPinnedOnly(false);
+    setSearch('');
+  }
+
+  const hasActiveFilters =
+    (selectedTags && selectedTags.length > 0) ||
+    favoritesOnly ||
+    pinnedOnly ||
+    (search && search.trim().length > 0);
 
   return (
     <section className="card" aria-label="Notes list">
-      <div className="list-header">
+      <div className="list-header" style={{ flexWrap: 'wrap' }}>
         <input
           value={search}
           onChange={(e) => setSearch(e.target.value)}
@@ -37,7 +53,123 @@ export function NoteList({
           placeholder="Search notes by title, content, or tag…"
           aria-label="Search notes"
         />
-        <div className="sort-control" style={{ display: 'flex', gap: 8 }}>
+
+        <div
+          className="filter-group"
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 12,
+            flexWrap: 'wrap',
+          }}
+          aria-label="Note filters"
+        >
+          <fieldset
+            style={{
+              border: 'none',
+              padding: 0,
+              margin: 0,
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 4,
+            }}
+          >
+            <legend
+              style={{
+                fontSize: 12,
+                color: 'var(--muted)',
+              }}
+            >
+              Flags
+            </legend>
+            <div
+              style={{
+                display: 'flex',
+                gap: 8,
+                flexWrap: 'wrap',
+              }}
+            >
+              <label
+                style={{ fontSize: 13, display: 'inline-flex', gap: 4 }}
+              >
+                <input
+                  type="checkbox"
+                  checked={favoritesOnly}
+                  onChange={(e) => setFavoritesOnly(e.target.checked)}
+                />
+                Favorites only
+              </label>
+              <label
+                style={{ fontSize: 13, display: 'inline-flex', gap: 4 }}
+              >
+                <input
+                  type="checkbox"
+                  checked={pinnedOnly}
+                  onChange={(e) => setPinnedOnly(e.target.checked)}
+                />
+                Pinned only
+              </label>
+            </div>
+          </fieldset>
+
+          <div
+            className="tag-filter"
+            style={{
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 4,
+              minWidth: 160,
+            }}
+          >
+            <label
+              htmlFor="tag-filter-select"
+              style={{ fontSize: 12, color: 'var(--muted)' }}
+            >
+              Filter by tags
+            </label>
+            <div
+              id="tag-filter-select"
+              aria-label="Filter by tags"
+              role="group"
+              style={{
+                display: 'flex',
+                flexWrap: 'wrap',
+                gap: 6,
+              }}
+            >
+              {allTags.length === 0 ? (
+                <span style={{ fontSize: 12, color: 'var(--muted)' }}>
+                  No tags yet
+                </span>
+              ) : (
+                allTags.map((tag) => {
+                  const active = selectedTags.includes(tag);
+                  return (
+                    <button
+                      key={tag}
+                      type="button"
+                      className="tag"
+                      onClick={() => handleTagToggle(tag)}
+                      aria-pressed={active}
+                    >
+                      #{tag}
+                    </button>
+                  );
+                })
+              )}
+            </div>
+          </div>
+        </div>
+
+        <div
+          className="sort-control"
+          style={{
+            display: 'flex',
+            gap: 8,
+            alignItems: 'center',
+            marginLeft: 'auto',
+          }}
+        >
           <label
             htmlFor="sort-notes"
             style={{ fontSize: 12, color: 'var(--muted)' }}
@@ -58,13 +190,62 @@ export function NoteList({
           </select>
         </div>
       </div>
-      {filtered.length === 0 ? (
+
+      {hasActiveFilters && (
+        <div
+          className="active-filters"
+          aria-label="Active filters"
+          style={{
+            display: 'flex',
+            flexWrap: 'wrap',
+            gap: 8,
+            padding: '8px 16px 0 16px',
+            alignItems: 'center',
+          }}
+        >
+          <span style={{ fontSize: 12, color: 'var(--muted)' }}>
+            Active:
+          </span>
+          {search && search.trim().length > 0 && (
+            <span className="filter-chip">
+              Search: “{search.trim()}”
+            </span>
+          )}
+          {favoritesOnly && (
+            <span className="filter-chip">Favorites only</span>
+          )}
+          {pinnedOnly && (
+            <span className="filter-chip">Pinned only</span>
+          )}
+          {selectedTags.map((t) => (
+            <button
+              key={t}
+              type="button"
+              className="filter-chip"
+              onClick={() => handleTagToggle(t)}
+              aria-label={`Remove tag filter ${t}`}
+            >
+              #{t} ×
+            </button>
+          ))}
+          <button
+            type="button"
+            className="btn"
+            onClick={handleClearFilters}
+            style={{ padding: '4px 10px', fontSize: 12, marginLeft: 'auto' }}
+          >
+            Clear all
+          </button>
+        </div>
+      )}
+
+      {notes.length === 0 ? (
         <div className="empty">
           No notes found. Create your first note or adjust your filters.
         </div>
       ) : (
         <ul className="note-list">
-          {filtered.map((note) => (
+          {notes.map((note) => (
             <li key={note.id} className="note-item">
               <button
                 type="button"
@@ -123,11 +304,15 @@ export function NoteList({
                   onClick={() => onTogglePinned(note.id)}
                   aria-pressed={note.pinned}
                   aria-label={
-                    note.pinned ? 'Unpin note from top of list' : 'Pin note to top of list'
+                    note.pinned
+                      ? 'Unpin note from top of list'
+                      : 'Pin note to top of list'
                   }
                   title={note.pinned ? 'Unpin' : 'Pin'}
                 >
-                  <span aria-hidden="true">{note.pinned ? '📌' : '📍'}</span>
+                  <span aria-hidden="true">
+                    {note.pinned ? '📌' : '📍'}
+                  </span>
                 </button>
                 <button
                   type="button"
@@ -141,7 +326,9 @@ export function NoteList({
                   }
                   title={note.favorite ? 'Unfavorite' : 'Favorite'}
                 >
-                  <span aria-hidden="true">{note.favorite ? '★' : '☆'}</span>
+                  <span aria-hidden="true">
+                    {note.favorite ? '★' : '☆'}
+                  </span>
                 </button>
                 <button
                   type="button"
