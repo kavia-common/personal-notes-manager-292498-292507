@@ -1,6 +1,6 @@
-# Personal Notes App (Ocean Professional)
+# Personal Notes App (Monochrome)
 
-A lightweight React frontend for managing personal notes (create, view, edit, delete) with localStorage persistence and an abstracted API layer, styled with the Ocean Professional theme.
+A lightweight React frontend for managing personal notes (create, view, edit, delete) with localStorage persistence and an abstracted API layer, styled with a monochrome black-and-white theme.
 
 ## Features
 - Create, edit, delete notes
@@ -34,13 +34,13 @@ The app reads standard React env variables if defined, but does not depend on a 
 - REACT_APP_EXPERIMENTS_ENABLED
 
 ## Theming
-Ocean Professional palette (see src/App.css):
-- Primary: #2563EB
-- Secondary: #F59E0B
-- Error: #EF4444
-- Background: #f9fafb
-- Surface: #ffffff
-- Text: #111827
+Monochrome palette (see src/App.css):
+- Background: #ffffff
+- Surface: #f5f5f5
+- Text: #111111
+- Accent: #000000
+- Muted: #6b7280
+- Border: #e5e7eb
 
 ## Swap Local to Backend
 Replace implementations inside src/notes/api/NotesService.js with network calls using env vars above. The UI will keep working without changes.
